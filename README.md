@@ -86,6 +86,16 @@ docker compose run --rm backend python -m app.cli disable coffee-queue
 docker compose run --rm backend python -m app.cli enable coffee-queue
 ```
 
+## Качество ИИ и расходы
+
+```bash
+docker compose run --rm backend python -m app.cli eval                         # 10 проверочных диалогов на реальной модели
+docker compose run --rm backend python -m app.cli eval --case injection-direct # один кейс
+docker compose run --rm backend python -m app.cli usage --days 14              # расходы по дням и себестоимость
+```
+
+`eval` тратит токены (порядка нескольких центов за прогон) и ничего не пишет в базу. Автоматические проверки ловят выход из роли, повторы вопросов, разметку и невалидный разбор; остальное — по ручному чек-листу в конце вывода.
+
 ## Повседневные команды
 
 ```bash

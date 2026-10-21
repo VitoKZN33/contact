@@ -13,3 +13,6 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+    # Значения server_default/onupdate (created_at, status …) возвращаются через RETURNING
+    # сразу при INSERT/UPDATE: в async-режиме ленивая подгрузка поля после записи невозможна.
+    __mapper_args__ = {"eager_defaults": True}

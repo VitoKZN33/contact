@@ -62,6 +62,8 @@ class TrainingSession(UUIDPk, Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
     analysis_status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'none'"))
     context_summary: Mapped[str | None] = mapped_column(Text)
+    # Реплики с sequence_number <= этого значения уже свёрнуты в context_summary
+    summary_until_seq: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     idempotency_key: Mapped[str | None] = mapped_column(String(64))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

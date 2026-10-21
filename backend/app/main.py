@@ -1,10 +1,13 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.factory import get_llm_provider
 from app.api.health import router as health_router
+from app.services.analysis_runner import schedule_recovery
 from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
@@ -15,6 +18,11 @@ from app.db.session import dispose_engine
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Разборы, прерванные перезапуском, запускаются заново в фоне
+    try:
+        schedule_recovery(get_llm_provider(), get_settings())
+    except Exception:
+        logging.getLogger(__name__).exception("analysis recovery not scheduled")
     yield
     await dispose_engine()
 

@@ -20,6 +20,9 @@ docker compose exec -T backend python -c "import urllib.request;urllib.request.u
 step "Миграции применены (head)"
 docker compose exec -T backend alembic current 2>/dev/null | grep -q '(head)' && ok || bad "(docker compose run --rm backend alembic upgrade head)"
 
+step "Ключ DeepSeek задан"
+grep -qE '^DEEPSEEK_API_KEY=.+' .env && ok || echo "WARN (впишите DEEPSEEK_API_KEY в .env)"
+
 step "Сценарии загружены"
 active="$(docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM scenarios WHERE is_active"' 2>/dev/null | tr -d '[:space:]')"
 [ -n "${active}" ] && [ "${active}" -gt 0 ] 2>/dev/null && echo "OK (${active})" || bad "(python -m app.cli seed)"

@@ -31,7 +31,10 @@ import pytest  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 
+from app.ai.factory import get_llm_provider  # noqa: E402
+from app.ai.mock import MockProvider  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
+from app.services.limits import reset_message_limiters  # noqa: E402
 from app.core.ratelimit import auth_limiter  # noqa: E402
 from app.db.session import dispose_engine, get_sessionmaker  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -84,15 +87,38 @@ async def db(migrated_database):
     await dispose_engine()
 
 
-@pytest.fixture
-def settings():
-    return get_settings()
-
-
-@pytest.fixture
-async def client(db):
+@pytest.fixture(autouse=True)
+def settings(monkeypatch):
+    """Предсказуемые лимиты независимо от .env сервера. Тест может менять их через monkeypatch."""
+    s = get_settings()
+    for name, value in {
+        "limit_trainings_per_day": 100,
+        "limit_analyses_per_day": 100,
+        "limit_messages_per_minute": 1000,
+        "max_user_turns": 30,
+        "max_message_chars": 1000,
+        "max_custom_situation_chars": 1500,
+        "context_summarize_after": 28,
+        "context_keep_messages": 16,
+        "training_ttl_hours": 24,
+        "ai_provider": "mock",
+    }.items():
+        monkeypatch.setattr(s, name, value)
     auth_limiter.reset()
+    reset_message_limiters()
+    return s
+
+
+@pytest.fixture
+def llm():
+    """Mock-провайдер вместо DeepSeek: без сети и без затрат."""
+    return MockProvider()
+
+
+@pytest.fixture
+async def client(db, llm):
     app = create_app()
+    app.dependency_overrides[get_llm_provider] = lambda: llm
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
