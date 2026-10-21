@@ -17,4 +17,5 @@ def get_llm_provider() -> LLMProvider:
         base_url=settings.deepseek_base_url,
         timeout_seconds=settings.ai_timeout_seconds,
         max_retries=settings.ai_max_retries,
+        attempt_timeout_seconds=settings.ai_attempt_timeout_seconds,
     )

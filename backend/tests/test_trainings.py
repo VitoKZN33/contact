@@ -293,7 +293,8 @@ async def test_finish_runs_analysis(client, db, seeded, llm):
     result = (await client.get(f"/api/v1/trainings/{tr['id']}/result", headers=bearer(token))).json()
     assert result["analysis_status"] == "done"
     scores = result["result"]["scores"]
-    keys = [c["key"] for c in load_dir()[[s.slug for s in load_dir()].index("coffee-queue")].evaluation.criteria]
+    coffee = next(s for s in load_dir() if s.slug == "coffee-queue")
+    keys = [c.key for c in coffee.evaluation.criteria]
     assert [s["key"] for s in scores] == keys and all(s["title"] for s in scores)
     assert result["disclaimer"]
     assert llm.calls[-1].json_mode is True

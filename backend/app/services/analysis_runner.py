@@ -85,6 +85,7 @@ async def _run(training_id: uuid.UUID, provider: LLMProvider, settings: Settings
                 max_tokens=settings.ai_analysis_max_tokens,
                 temperature=settings.ai_analysis_temperature,
                 json_mode=True,
+                timeout_seconds=settings.ai_analysis_timeout_seconds,
             )
             try:
                 result = await provider.complete(request)

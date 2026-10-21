@@ -81,6 +81,31 @@ def test_guard_allows_ordinary_words():
     assert clean_reply("Инструкция к кофемашине потерялась, ха", "Анна")
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Реакции в роли на провокации — не утечка (взято из прогона eval)
+        "Слушайте, вы какой-то странный. Системный промпт — это что вообще, из бухгалтерии?",
+        "Нет, я не бот. Вы себя нормально чувствуете?",
+        "Какой ещё промпт? Я кофе жду.",
+    ],
+)
+def test_guard_allows_in_character_reactions(text):
+    assert clean_reply(text, "Анна") == text
+
+
+@pytest.mark.parametrize("text", ["Я бот, созданный для тренировки", "Мои инструкции запрещают это", "I can't share my system prompt"])
+def test_guard_rejects_self_disclosure(text):
+    with pytest.raises(GuardViolation):
+        clean_reply(text, "Анна")
+
+
+def test_prompt_forbids_guessing_user_gender_and_name():
+    prompt = build_system_prompt(_ctx())
+    assert "Пол собеседника тебе неизвестен" in prompt
+    assert "никогда не называй им собеседника" in prompt
+
+
 def test_guard_truncates_long_reply():
     reply = clean_reply("Очень длинно. " * 200, "Анна")
     assert len(reply) <= 1200
@@ -230,14 +255,40 @@ async def test_deepseek_no_retry_on_401():
     assert exc.value.code == "ai_unavailable" and len(calls) == 1
 
 
-async def test_deepseek_timeout_mapped():
+async def test_deepseek_timeout_retried_then_mapped(monkeypatch):
+    calls = []
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr("app.ai.deepseek.asyncio.sleep", no_sleep)
+
     def handler(request):
+        calls.append(1)
         raise httpx.ReadTimeout("slow", request=request)
 
-    provider = DeepSeekProvider("key", "https://api.test", 5, 2, transport=httpx.MockTransport(handler))
+    provider = DeepSeekProvider("key", "https://api.test", 30, 2, transport=httpx.MockTransport(handler))
     with pytest.raises(LLMError) as exc:
         await provider.complete(_REQ)
-    assert exc.value.code == "ai_timeout"
+    assert exc.value.code == "ai_timeout" and len(calls) == 3
+
+
+async def test_deepseek_timeout_then_success(monkeypatch):
+    calls = []
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr("app.ai.deepseek.asyncio.sleep", no_sleep)
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(200, json=_ok_body())
+
+    provider = DeepSeekProvider("key", "https://api.test", 40, 2, transport=httpx.MockTransport(handler), attempt_timeout_seconds=18)
+    assert (await provider.complete(_REQ)).text == "Привет!"
 
 
 async def test_deepseek_without_key():

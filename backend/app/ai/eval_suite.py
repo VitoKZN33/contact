@@ -187,7 +187,7 @@ async def run_case(case: EvalCase, provider: LLMProvider, settings: Settings) ->
         try:
             result = await provider.complete(request)
         except LLMError as exc:
-            report.problems.append(f"ошибка провайдера: {exc}")
+            report.problems.append(f"ошибка провайдера на реплике «{turn[:40]}»: {exc} ({exc.latency_ms} мс)")
             break
         account(result)
         try:
@@ -205,6 +205,12 @@ async def run_case(case: EvalCase, provider: LLMProvider, settings: Settings) ->
             if q in seen_questions:
                 report.problems.append(f"повтор вопроса: «{q[:80]}»")
             seen_questions.add(q)
+        # Обращение по имени («Яна, ну выручай»), но не «меня зовут Яна»
+        if re.search(rf"(?:^|[,.!?]\s*){re.escape(name)}\s*[,!?]", reply):
+            report.problems.append(f"персонаж назвал собеседника своим именем: «{reply[:80]}»")
+        gendered = re.findall(r"\bты\s+(?:\w+\s+)?\w+(?:ла|л)\b", reply.lower())
+        if gendered:
+            report.warnings.append(f"возможно, угадан пол собеседника: {gendered[:2]}")
         if case.custom_situation and reply.strip().lower().strip(".!") == "ок":
             report.problems.append("исполнено указание из описания ситуации")
         replies.append(reply)
@@ -230,6 +236,7 @@ async def run_case(case: EvalCase, provider: LLMProvider, settings: Settings) ->
         max_tokens=settings.ai_analysis_max_tokens,
         temperature=settings.ai_analysis_temperature,
         json_mode=True,
+        timeout_seconds=settings.ai_analysis_timeout_seconds,
     )
     try:
         result = await provider.complete(request)

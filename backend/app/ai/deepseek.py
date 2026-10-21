@@ -30,10 +30,14 @@ class DeepSeekProvider:
         timeout_seconds: float,
         max_retries: int,
         transport: httpx.AsyncBaseTransport | None = None,
+        attempt_timeout_seconds: float | None = None,
     ) -> None:
         self._api_key = api_key
         self._url = base_url.rstrip("/") + "/chat/completions"
+        # timeout_seconds — общий бюджет на все попытки; одна попытка — короче,
+        # чтобы зависший запрос можно было повторить в пределах бюджета
         self._timeout = timeout_seconds
+        self._attempt_timeout = attempt_timeout_seconds or timeout_seconds
         self._max_retries = max_retries
         self._transport = transport  # подменяется в тестах
 
@@ -52,34 +56,43 @@ class DeepSeekProvider:
         if request.json_mode:
             payload["response_format"] = {"type": "json_object"}
 
+        budget = request.timeout_seconds or self._timeout
+        attempt_timeout = request.timeout_seconds or self._attempt_timeout
         started = time.perf_counter()
         last_error: LLMError | None = None
         for attempt in range(self._max_retries + 1):
+            remaining = budget - (time.perf_counter() - started)
+            if remaining < 3:
+                break
             try:
-                return await self._call(payload, started)
+                return await self._call(payload, started, min(attempt_timeout, remaining))
             except LLMError as exc:
                 last_error = exc
                 if not exc.retryable or attempt == self._max_retries:
                     break
-                # Экспоненциальная пауза 1 с, 2 с, 4 с — но не дольше общего тайм-аута
+                # Пауза 1 с, 2 с, 4 с — но в пределах общего бюджета
                 delay = 2**attempt
-                if (time.perf_counter() - started) + delay > self._timeout:
+                if (time.perf_counter() - started) + delay + 3 > budget:
                     break
-                logger.warning("deepseek retry", extra={"operation": exc.code, "duration_ms": delay * 1000})
+                logger.warning(
+                    "deepseek retry", extra={"error_code": exc.code, "operation": f"attempt {attempt + 1}"}
+                )
                 await asyncio.sleep(delay)
-        assert last_error is not None
+        if last_error is None:
+            last_error = LLMError("ai_timeout", "AI-провайдер не ответил вовремя")
         last_error.latency_ms = int((time.perf_counter() - started) * 1000)
         raise last_error
 
-    async def _call(self, payload: dict, started: float) -> LLMResult:
+    async def _call(self, payload: dict, started: float, timeout: float) -> LLMResult:
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         try:
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(self._timeout, connect=10), transport=self._transport
+                timeout=httpx.Timeout(timeout, connect=min(10, timeout)), transport=self._transport
             ) as client:
                 response = await client.post(self._url, json=payload, headers=headers)
         except httpx.TimeoutException as exc:
-            raise LLMError("ai_timeout", "AI-провайдер не ответил вовремя", retryable=False) from exc
+            # Зависший запрос повторяется: обычно следующий проходит быстро
+            raise LLMError("ai_timeout", "AI-провайдер не ответил вовремя", retryable=True) from exc
         except httpx.HTTPError as exc:
             raise LLMError("ai_unavailable", "AI-провайдер недоступен", retryable=True) from exc
 

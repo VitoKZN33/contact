@@ -19,6 +19,8 @@ class LLMRequest:
     max_tokens: int
     temperature: float
     json_mode: bool = False
+    # Общий бюджет времени для этого запроса; None — значение провайдера
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)

@@ -40,7 +40,11 @@ class Settings(BaseSettings):
     # Идентификаторы сверены с api-docs.deepseek.com (октябрь 2026)
     deepseek_model_dialog: str = "deepseek-flash"
     deepseek_model_analysis: str = "deepseek-v4-pro"
+    # Общий бюджет на ответ персонажа (Nginx ждёт 60 с) и одна попытка внутри него
     ai_timeout_seconds: float = Field(default=40, gt=0)
+    ai_attempt_timeout_seconds: float = Field(default=18, gt=0)
+    # Разбор идёт в фоне — ему можно дольше
+    ai_analysis_timeout_seconds: float = Field(default=120, gt=0)
     ai_max_retries: int = Field(default=2, ge=0, le=5)
     ai_dialog_max_tokens: int = Field(default=300, ge=50, le=4000)
     ai_dialog_temperature: float = Field(default=0.9, ge=0, le=2)
