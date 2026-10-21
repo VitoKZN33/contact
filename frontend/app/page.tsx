@@ -1,107 +1,68 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { z } from "zod";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { apiGet } from "@/lib/api";
-import { getInitData, getWebApp } from "@/lib/telegram";
-
-// Этап 2: служебная стартовая страница для проверки связки
-// Telegram → Nginx → backend → PostgreSQL. Главная появится на Этапе 5.
-
-const liveSchema = z.object({ status: z.literal("ok") });
-
-const readySchema = z.object({
-  status: z.string(),
-  checks: z.object({ database: z.string() }),
-});
-
-type Check = { label: string; state: "ok" | "fail" | "pending"; hint?: string };
+import { Button } from "@/components/ui/Button";
+import { Screen } from "@/components/ui/Screen";
+import { useUser } from "@/features/auth/AuthProvider";
+import { useActiveTraining } from "@/features/queries";
+import { errorText } from "@/lib/api";
 
 export default function HomePage() {
-  const [telegram, setTelegram] = useState<{ inside: boolean; platform: string } | null>(null);
-
-  useEffect(() => {
-    const app = getWebApp();
-    setTelegram({ inside: getInitData() !== null, platform: app?.platform ?? "браузер" });
-  }, []);
-
-  const live = useQuery({
-    queryKey: ["health-live"],
-    queryFn: () => apiGet("/health/live", liveSchema),
-  });
-  const ready = useQuery({
-    queryKey: ["health-ready"],
-    queryFn: () => apiGet("/health/ready", readySchema),
-  });
-
-  const checks: Check[] = [
-    {
-      label: "Открыто из Telegram",
-      state: telegram === null ? "pending" : telegram.inside ? "ok" : "fail",
-      hint: telegram === null ? undefined : telegram.inside ? telegram.platform : "откройте через бота",
-    },
-    {
-      label: "Backend",
-      state: live.isPending ? "pending" : live.isSuccess ? "ok" : "fail",
-      hint: live.error?.message,
-    },
-    {
-      label: "База данных",
-      state: ready.isPending ? "pending" : ready.isSuccess ? "ok" : "fail",
-      hint: ready.isError ? "backend не видит PostgreSQL" : undefined,
-    },
-  ];
-
-  const refresh = () => {
-    void live.refetch();
-    void ready.refetch();
-  };
-  const fetching = live.isFetching || ready.isFetching;
+  const user = useUser();
+  const router = useRouter();
+  const active = useActiveTraining();
+  const training = active.data?.training ?? null;
+  const firstName = user.display_name?.split(" ")[0];
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-8 pt-10">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted">Каркас · Этап 2</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Контакт</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted">
-        Тренажёр живого общения. Эта страница проверяет, что все части приложения связаны.
-      </p>
+    <Screen
+      footer={
+        <Button onClick={() => router.push("/scenarios/")}>{training ? "Новая тренировка" : "Начать тренировку"}</Button>
+      }
+    >
+      <div className="pt-[12vh]">
+        <p className="text-small text-muted">{firstName ? `Привет, ${firstName}` : "Привет"}</p>
+        <h1 className="mt-3 text-[2.375rem] font-semibold leading-[1.08] tracking-[-0.03em] text-balance">
+          Отрепетируйте разговор до того, как он случится
+        </h1>
+        <p className="mt-4 max-w-sm text-body text-muted text-pretty">
+          Собеседник с характером, живой диалог и разбор после — что сработало и как сказать иначе.
+        </p>
+      </div>
 
-      <ul className="mt-8 space-y-2">
-        {checks.map((check) => (
-          <li
-            key={check.label}
-            className="flex items-center justify-between rounded-[var(--radius-card)] bg-card px-4 py-4"
-          >
-            <div>
-              <p className="text-sm font-medium">{check.label}</p>
-              {check.hint ? <p className="mt-0.5 text-xs text-muted">{check.hint}</p> : null}
-            </div>
-            <StatusDot state={check.state} />
-          </li>
-        ))}
-      </ul>
+      {training ? (
+        <Link
+          href={`/chat/?id=${training.id}`}
+          className="mt-10 block rounded-[var(--radius-card)] bg-card p-4 ring-1 ring-inset ring-accent/50 active:bg-surface"
+        >
+          <span className="flex items-center gap-2 text-caption text-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+            Незавершённая тренировка
+          </span>
+          <span className="mt-2 block text-body font-semibold">{training.scenario.title}</span>
+          <span className="mt-0.5 block text-small text-muted">
+            {training.persona.name}, {training.persona.type_title.toLowerCase()} · реплик: {training.user_turns}
+          </span>
+          <span className="mt-3 inline-flex h-10 items-center rounded-[12px] bg-accent px-4 text-small font-semibold text-accent-ink">
+            Продолжить
+          </span>
+        </Link>
+      ) : null}
 
-      <button
-        type="button"
-        onClick={refresh}
-        disabled={fetching}
-        className="mt-6 h-12 rounded-[var(--radius-control)] bg-accent text-sm font-semibold text-bg transition-opacity active:opacity-80 disabled:opacity-50"
-      >
-        {fetching ? "Проверяю…" : "Проверить ещё раз"}
-      </button>
-    </main>
-  );
-}
+      {active.isError ? <p className="mt-6 text-caption text-muted">{errorText(active.error)}</p> : null}
 
-function StatusDot({ state }: { state: Check["state"] }) {
-  const label = state === "ok" ? "работает" : state === "fail" ? "ошибка" : "проверка";
-  const color = state === "ok" ? "bg-success" : state === "fail" ? "bg-danger" : "bg-surface animate-pulse";
-  return (
-    <span className="flex items-center gap-2 text-xs text-muted">
-      {label}
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} aria-hidden />
-    </span>
+      <nav className="mt-10 grid grid-cols-2 gap-2" aria-label="Разделы">
+        <Link href="/profile/" className="rounded-[var(--radius-card)] bg-card p-4 active:bg-surface">
+          <span className="block text-small font-semibold">Профиль</span>
+          <span className="mt-1 block text-caption text-muted">История и данные</span>
+        </Link>
+        <Link href="/help/" className="rounded-[var(--radius-card)] bg-card p-4 active:bg-surface">
+          <span className="block text-small font-semibold">Как пользоваться</span>
+          <span className="mt-1 block text-caption text-muted">Три шага и советы</span>
+        </Link>
+      </nav>
+    </Screen>
   );
 }

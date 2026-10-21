@@ -39,6 +39,14 @@ step "Mini App отдаётся по HTTPS"
 code="$(curl -s ${RESOLVE} -o /dev/null -w '%{http_code}' "https://${DOMAIN}/")"
 [ "${code}" = "200" ] && ok || bad "(HTTP ${code})"
 
+step "Экраны Mini App собраны"
+missing=""
+for page in scenarios setup chat result profile help privacy; do
+  code="$(curl -s ${RESOLVE} -o /dev/null -w '%{http_code}' "https://${DOMAIN}/${page}/")"
+  [ "${code}" = "200" ] || missing="${missing} ${page}(${code})"
+done
+[ -z "${missing}" ] && ok || bad "(${missing# })"
+
 step "Поддельный initData отклоняется"
 code="$(curl -s ${RESOLVE} -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
   -d '{"init_data":"user=%7B%22id%22%3A1%7D&auth_date=1&hash=deadbeef"}' "https://${DOMAIN}/api/v1/auth/telegram")"
