@@ -66,15 +66,34 @@ bash infrastructure/scripts/check.sh
 
 Ожидаемый итог — `ALL_CHECKS_OK`. Затем откройте бота в Telegram, нажмите /start и «Открыть «Контакт»»: все три проверки на экране должны быть зелёными.
 
+## Обновление
+
+```bash
+cd /opt/contact && bash infrastructure/scripts/deploy.sh
+```
+
+Скрипт обновляет код, собирает образы, применяет миграции отдельным шагом, перезапускает сервисы, загружает сценарии и запускает проверку.
+
+## Сценарии
+
+Сценарии лежат в `backend/app/scenarios/seed/*.yaml`. Изменили содержимое — увеличьте `version`: старая версия останется в БД для истории тренировок.
+
+```bash
+docker compose run --rm backend python -m app.cli validate          # проверить файлы
+docker compose run --rm backend python -m app.cli seed              # загрузить
+docker compose run --rm backend python -m app.cli list              # что в БД
+docker compose run --rm backend python -m app.cli disable coffee-queue
+docker compose run --rm backend python -m app.cli enable coffee-queue
+```
+
 ## Повседневные команды
 
 ```bash
 cd /opt/contact
-git pull && docker compose up -d --build   # обновление
 docker compose ps                           # состояние
 docker compose logs -f --tail 100 backend   # логи (bot, web, db)
-docker compose exec backend pytest -q       # тесты backend
-docker compose run --rm backend alembic upgrade head   # миграции (с Этапа 3)
+docker compose exec backend pytest -q       # тесты (в отдельной базе contact_test)
+docker compose run --rm backend alembic upgrade head   # миграции вручную
 ```
 
 Миграции не запускаются автоматически при старте контейнеров: это отдельный шаг после `git pull`.

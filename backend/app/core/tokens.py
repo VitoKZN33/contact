@@ -1,0 +1,11 @@
+import hashlib
+import secrets
+
+
+def new_session_token() -> str:
+    """256 бит случайности, URL-safe."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
