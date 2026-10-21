@@ -1,0 +1,16 @@
+[project]
+name = "contact-bot"
+version = "0.1.0"
+description = "Telegram-бот «Контакт»: запуск Mini App и уведомления"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "aiogram>=3.15,<4",
+    "pydantic-settings>=2.6,<3",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

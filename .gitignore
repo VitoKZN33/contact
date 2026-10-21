@@ -1,0 +1,24 @@
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Бэкапы и локальные данные
+backups/
+*.dump
+*.sql.gz
+
+.DS_Store
